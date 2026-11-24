@@ -32,21 +32,36 @@ GET /search?q=&category= ──────────────────�
 
 | Method | Path | Description |
 | --- | --- | --- |
-| POST | `/products` | `{name, description, category, price}` -> 201 |
+| POST | `/products` | `{sku, name, description, brand, category, price, stock, rating}` -> 201 |
 | PUT | `/products/{id}` | Create or replace |
+| PATCH | `/products/{id}/stock` | `{stock}`: cheap, frequent update that still re-indexes |
 | GET | `/products/{id}` | Cached read |
-| GET | `/search?q=&category=` | Full-text search (name boosted over description), optional category filter |
+| GET | `/search` | Storefront search (below) |
+| GET | `/suggest?q=` | Type-ahead suggestions for the search box |
 
-Interactive docs at `/scalar` in Development.
+### Storefront search
+
+```
+GET /search?q=running shoe&category=Shoes&brand=Nike&brand=Adidas
+           &minPrice=50&maxPrice=200&inStock=true&sort=PriceAsc&page=1&pageSize=12
+```
+
+- **Free text**: every term must match; SKU and name weigh most, then brand, category, description (Elasticsearch adds fuzziness for typos).
+- **Filters**: category, multi-select brand, price range, in-stock only.
+- **Sorting**: `Relevance` (default), `PriceAsc`, `PriceDesc`, `Rating`, `Newest`.
+- **Paging**: `page`, `pageSize` (max 50).
+- **Facets** in every response, computed over the whole matching set: `categories` and `brands` with counts, plus `minPrice` / `maxPrice` to drive a price slider.
+
+Interactive docs at `/scalar` in Development. Set `Catalog__Seed=true` to load 12 demo products (shoes, clothing, bags, electronics); seeding is idempotent.
 
 ## Run
 
 ```bash
 docker compose up --build        # API on :8080 with Mongo, Elasticsearch, Redis, RabbitMQ (UI :15672)
-dotnet run --project src/Catalog.Api   # or: no infrastructure, everything in memory
+Catalog__Seed=true dotnet run --project src/Catalog.Api   # or: no infrastructure, everything in memory
 dotnet test
 ```
 
 ## Status
 
-The 5 automated tests exercise the full flow against the in-memory adapters. The MongoDB, Elasticsearch, Redis and RabbitMQ adapters compile and are wired through the compose file, but have not been integration-tested against live servers yet.
+The 8 automated tests exercise search, filters, facets, sorting, paging, suggestions and the stock-update flow against the in-memory adapters (which define the reference semantics). The MongoDB, Elasticsearch, Redis and RabbitMQ adapters compile and are wired through the compose file, but have not been integration-tested against live servers yet.
